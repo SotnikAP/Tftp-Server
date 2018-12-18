@@ -4,12 +4,11 @@
 using namespace boost::asio;
 using namespace tftp_server;
 
-TftpServer::TftpServer( boost::asio::io_service& service ) : service_( service ), socket_( service ), currentNumOfBlock_(0)
+TftpServer::TftpServer( boost::asio::io_service& service ) : service_( service ), socket_( service, udp::endpoint( udp::v4(), tftp::tftpPort ) ), currentNumOfBlock_(1)
 {
      try
      {
-          socket_.open(ip::udp::v4() );
-          socket_.bind(ip::udp::endpoint(ip::udp::v4(), tftp::tftpPort ) );
+//          socket_.open(ip::udp::v4() );
 
           startProcessing();
      }
@@ -25,7 +24,8 @@ void TftpServer::startProcessing()
 {
      while ( true )
      {
-          socket_.receive( buffer( buffer_, tftp::packageSize ) );
+          Sleep( 1000 );
+          socket_.receive_from( buffer( buffer_, tftp::packageSize ), remote_endpoint_ );
           process_package();
      }
 }
@@ -50,15 +50,15 @@ void TftpServer::process_package()
      }
      else if ( currentOperation == tftp::WRQ )
      {
-          if ( operationInProcess_ == tftp::nothing )
-          {
+          //if ( operationInProcess_ == tftp::nothing )
+          //{
                operationInProcess_ = tftp::write;
                process_WrqPackage();
-          }
-          else
-          {
-               throw std::runtime_error( "WRQ package recieved while processing another RRQ/WRQ package" );
-          }
+          //}
+          //else
+          //{
+          //     throw std::runtime_error( "WRQ package recieved while processing another RRQ/WRQ package" );
+          //}
      }
      else if ( currentOperation == tftp::data )
      {
@@ -98,19 +98,71 @@ void TftpServer::process_WrqPackage()
      strcpy_s( filename, buffer_ + sizeof( operationCode ) );
      strcpy_s( mode, buffer_ + sizeof( operationCode ) + strlen( filename ) + 1 );
      currentFile_ = TftpFile( filename, operationInProcess_ );
+     clearBuff();
+     send_WRQconfirmation();
+}
+
+void TftpServer::send_confirmation()
+{
+     std::cout << "Sending confirmation\n";
+
+     operationCode dataPackage = ntohs( static_cast<int>( tftp::confirmation ) );
+     memmove( buffer_, &dataPackage, sizeof( operationCode ) );
+     currentNumOfBlock_ = ntohs( currentNumOfBlock_ );
+     memmove( buffer_ + sizeof( operationCode ), &currentNumOfBlock_, sizeof( unsigned short ) );
+
+     socket_.send_to( buffer( buffer_, tftp::packageSize ), remote_endpoint_ );
+     clearBuff();
+}
+
+void TftpServer::send_WRQconfirmation()
+{
+     std::cout << "Sending confirmation\n";
+
+     operationCode dataPackage = ntohs( static_cast<int>( tftp::confirmation ) );
+     memmove( buffer_, &dataPackage, sizeof( operationCode ) );
+     currentNumOfBlock_ = ntohs( 0 );
+     memmove( buffer_ + sizeof( operationCode ), &currentNumOfBlock_, sizeof( unsigned short ) );
+
+     socket_.send_to( buffer( buffer_, tftp::packageSize ), remote_endpoint_ );
+     clearBuff();
 }
 
 void TftpServer::process_dataPackage()
 {
+     std::cout << "Processing data package\n";
 
-     operationInProcess_ = tftp::nothing;
+     char buf[tftp::dataSize];
+     memmove( &currentNumOfBlock_, buffer_ + 2, sizeof( unsigned short ) );
+     currentNumOfBlock_ = ntohs( currentNumOfBlock_ );
+
+     std::cout << "Block #" << currentNumOfBlock_ << std::endl;
+
+     memmove( buf, buffer_ + 4, tftp::dataSize );
+     currentFile_.writeBlockInFile( buf, currentNumOfBlock_ );
+     clearBuff();
+     send_confirmation();
 }
 
-bool TftpServer::process_confirmationPackage()
+void TftpServer::process_confirmationPackage()
 {
-     currentNumOfBlock_++;
-     send_dataPackage();
-     return true;
+     std::cout << "Processing confirmation\n";
+
+     memmove( &currentNumOfBlock_, buffer_ + 2, sizeof( unsigned short ) );
+     currentNumOfBlock_ = ntohs( currentNumOfBlock_ );
+
+     std::cout << "Block #" << currentNumOfBlock_ << "confirmed. ++blockNum \n";
+
+     if ( currentNumOfBlock_ < currentFile_.getNumberOfBlocks() )
+     {
+          currentNumOfBlock_++;
+          send_dataPackage();
+     }
+     else
+     {
+          std::cout << "Last block send\n";
+          return;
+     }
 }
 
 void TftpServer::process_errorPackage()
@@ -123,10 +175,24 @@ void TftpServer::process_errorPackage()
 
 void TftpServer::send_dataPackage()
 {
-     Sleep( 2500 );
-     operationCode dataPackage = tftp::data;
+     std::cout << "Sending data package #" << currentNumOfBlock_ << std::endl;
+
+     operationCode dataPackage = ntohs( static_cast<int>( tftp::data ) );
      memmove( buffer_, &dataPackage, sizeof( operationCode ) );
-     memmove( buffer_ + 2, &currentNumOfBlock_, sizeof( size_t ) );
-     currentFile_.readBlockFromFile( buffer_ + 4, currentNumOfBlock_ );
-     socket_.send_to( buffer( buffer_, tftp::packageSize ), udp::endpoint( ip::udp::v4(), tftp::tftpPort ) );
+     unsigned short currentBlock = ntohs( currentNumOfBlock_ );
+     memmove( buffer_ + sizeof( operationCode ), &currentBlock, sizeof( unsigned short ) );
+     currentFile_.readBlockFromFile( 
+          buffer_ + sizeof( operationCode ) + sizeof( unsigned short ),
+          currentNumOfBlock_ );
+     socket_.send_to( buffer( buffer_, tftp::packageSize ), remote_endpoint_ );
+     //currentNumOfBlock_++;
+     clearBuff();
+}
+
+void TftpServer::clearBuff()
+{
+     for ( int i = 0; i < 516; ++i )
+     {
+          buffer_[i] = 0;
+     }
 }

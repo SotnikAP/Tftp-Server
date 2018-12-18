@@ -4,7 +4,16 @@
 
 void TftpFile::readBlockFromFile( char* buff, int blockNumber ) const
 {
-     readFile_->read( buff, tftp::package::dataSize );
+     readFile_->seekg( 512*(blockNumber - 1) );
+     if ( blockNumber != numOfBlocks_ )
+     {
+          readFile_->read( buff, 512 );
+     }
+     else
+     {
+          readFile_->read( buff, 512 );
+     }
+
 }
 
 void TftpFile::writeBlockInFile( char* buff, int blockNumber )
@@ -26,20 +35,17 @@ TftpFile::TftpFile()
 }
 
 
-TftpFile::TftpFile( const std::string& filename, tftp::readOrWrite operation ) : operation_( operation )
+TftpFile::TftpFile( const std::string& filename, tftp::readOrWrite operation ) : operation_( operation ), filename_(filename)
 {
      bool openSucced = false;
      operation_ == tftp::readOrWrite::read ?
-          openSucced = openRead( filename ) :
-          openSucced = openWrite( filename );
+          openSucced = openRead( filename_ ) :
+          openSucced = openWrite( filename_ );
 
      if ( !openSucced )
      {
           throw std::runtime_error( "Can't open the file" );
      }
-
-
-
 }
 
 bool TftpFile::openRead( const std::string& filename )
@@ -86,5 +92,5 @@ void TftpFile::countBlocks()
      int lenght = readFile_->tellg();
      readFile_->seekg( 0, readFile_->beg );
 
-     numOfBlocks_ = lenght / tftp::dataSize;
+     numOfBlocks_ = ( lenght / tftp::dataSize ) + 1;
 }

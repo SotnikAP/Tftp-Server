@@ -27,7 +27,9 @@ public:
      void process_dataPackage();
 
      /// @brief Обработка пакета-подтверждения
-     bool process_confirmationPackage();
+     void process_confirmationPackage();
+
+     void send_WRQconfirmation();
 
      /// @brief Обработка пакета с ошибкой
      void process_errorPackage();
@@ -35,11 +37,16 @@ public:
      /// @brief Отправка пакета с данными
      void send_dataPackage();
 
+     void send_confirmation();
+
+     void clearBuff();
 
 private:
      boost::asio::io_service& service_;
      udp::socket socket_;
      char buffer_[tftp::packageSize];
+
+     udp::endpoint remote_endpoint_;
 
      TftpFile currentFile_;
      size_t currentNumOfBlock_ = 0;
