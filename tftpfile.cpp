@@ -5,20 +5,16 @@
 void TftpFile::readBlockFromFile( char* buff, int blockNumber ) const
 {
      readFile_->seekg( 512*(blockNumber - 1) );
-     if ( blockNumber != numOfBlocks_ )
-     {
-          readFile_->read( buff, 512 );
-     }
-     else
-     {
-          readFile_->read( buff, 512 );
-     }
-
+     readFile_->read( buff, 512 );
 }
 
-void TftpFile::writeBlockInFile( char* buff, int blockNumber )
+void TftpFile::writeBlockInFile( char* buff, int blockNumber ) const
 {
      writeFile_->write( buff, tftp::package::dataSize );
+     if ( blockNumber == numOfBlocks_ )
+     {
+          writeFile_->close();
+     }
 }
 
 
@@ -79,15 +75,6 @@ bool TftpFile::isFileExists( const std::string& filename ) const
 
 void TftpFile::countBlocks()
 {
-    /* const std::streampos cur_pos = readFile_->tellg();
-
-     readFile_->seekg( 0, readFile_->end );
-     int length = readFile_->tellg();
-
-     readFile_->seekg( cur_pos, readFile_->cur );
-
-     numOfBlocks_ = length / tftp::package::dataSize;*/
-
      readFile_->seekg( 0, readFile_->end );
      int lenght = readFile_->tellg();
      readFile_->seekg( 0, readFile_->beg );

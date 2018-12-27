@@ -23,7 +23,7 @@ public:
      void readBlockFromFile( char* buff, int blockNumber ) const;
 
      /// @brief —читать блок данных из buff в файл
-     void writeBlockInFile( char* buff, int blockNumber );
+     void writeBlockInFile( char* buff, int blockNumber ) const;
 
      /// @brief —колько 512-байтных блоков нужно отправить дл€ завершени€
      int getNumberOfBlocks() const;
